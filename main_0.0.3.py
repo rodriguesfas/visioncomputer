@@ -38,30 +38,56 @@ import math
 from math import pi
 import time
 from random import choice
+from matplotlib import pyplot as plt
+
 
 
 '''
-Tempo de execução
+    Variáveis globais
 '''
 START_TIME = time.time()
-
-
-'''
-variáveis globais
-'''
 SIGMA = 2,2
-VIEWIMG = 0
+PI = 1.14
+
+'''
+    1 ativar
+    0 desativar
+
+    Obs.: usar apenas com diretório unitário.
+''' 
+TEST_UNIT = 0
+
+'''
+    1 ativar
+    0 desativar
+
+    Obs.: para exibir gráfico.
+''' 
+GRAPHIC = 0
+
+df_yes = 0     # faces detectadas.
+df_no = 0      # possiveis faces.
+all_df = 0     # total de faces detectadas.
+all_no_df = 0  # total de possiveis faces.
+allfiles = 0   # total de arquivos analisados.
+
 
 
 '''
     Configuração do caminho do diretório de imagens.
 '''
-dir_files = '../src/img/input/database/test/simples'
-#dir_files = '../src/img/input/database/test/complexo'
 
-#dir_files = '../src/img/input/database/bd_01/complexo'
-#dir_files = '../src/img/input/database/bd_02/complexo'
-#dir_files = '../src/img/input/database/bd_02/simples'
+# ATENÇÃO, esse diretório é destinado apenas para imagens de treinamento do algoritimo.
+dir_files = '../src/img/input/database/training/unitario'
+#dir_files = '../src/img/input/database/training/bg_simples'
+#dir_files = '../src/img/input/database/training/bg_moderado'
+#dir_files = '../src/img/input/database/training/bg_complexo'
+
+# Diretórios das bases de dados para processamento.
+#dir_files = '../src/img/input/database/test_01/bg_complexo'
+
+#dir_files = '../src/img/input/database/test_02/bg_simples'
+#dir_files = '../src/img/input/database/test_02/bg_complexo'
 
 img_file = [i for i in glob.glob(dir_files+"/*.jpg")]
 img_file.sort()
@@ -86,38 +112,55 @@ def randomIDImg(size):
 '''
     Exibe imagens processadas na tela.
     Usar, somente em modo de teste, quando estiver exibindo as imagens na janela.
-    Recomenda-se testar com no MAX. 5 imagens, risco de deadlock.
+    Recomenda-se testar com 1 imagens apenas, para visualizar todas as janelas queserão abertas passso a passo do processo.
 '''
 def showImg(title, img):
-    if(VIEWIMG):
+    if(TEST_UNIT):
         cv2.imshow(title, img)
+
+
+
+# outHist - Exibe resultado do histograma da imagem em questão.
+def outHist(title, img):
+    hist, bins = np.histogram(img.flatten(), 256, [0, 256])
+
+    cdf = hist.cumsum()
+    cdf_normalized = cdf * hist.max()/ cdf.max()
+
+    plt.plot(cdf_normalized, color='b')
+    plt.hist(img.flatten(), 256, [0, 256], color='r')
+    plt.xlim([0, 256])
+    plt.title(title, loc='left')
+    plt.legend(('cdf', 'histogram'), loc='upper left')
+    plt.show()
 
 
 
 '''
     Loop
 '''
-print('Start processing..')
+print('Iniciado analise de imagens ;)')
 
-for i in img_file:
+for file in img_file:
 
     id_img = randomIDImg(10)
 
-    n = cv2.imread(i)
-    images.append(n)
-    print('file processing: '+i)
+    f = cv2.imread(file)
+    images.append(f)
+    print('arquivo processado: '+file)
 
 
-    img_orig = cv2.imread(i, 0)
+    img_orig = cv2.imread(file)
     showImg('Image Original', img_orig)
 
-    # Verifica se a imgagem é RGB antes de converter para escala de cinza.
+    # Verifica se a imagem é RGB antes de converter para escala de cinza.
     if img_orig.shape[-1] == 3:                    # color image
         b, g, r = cv2.split(img_orig)              # get b, g, r
         img_orig = cv2.merge([r, g, b])            # switch it to rgb
         img_gray = cv2.cvtColor(img_orig, cv2.COLOR_BGR2GRAY)
 
-        showImg('Image Cinza', img_gray)
+        cv2.imwrite('../src/img/output/processing/'+id_img+'_img_gray.jpg', img_gray)
+        showImg('Step 00 - Image Cinza', img_gray)
     else:
         img_gray = img_orig
 
@@ -134,6 +177,9 @@ for i in img_file:
     cv2.imwrite('../src/img/output/processing/'+id_img+'_img_hist.jpg', img_hist)
     showImg('Step 01 - Image Enhancement (Equalize Histogram)', img_hist)
 
+    if(GRAPHIC):
+        outHist("Imagem Cinza", img_gray)
+        outHist("Imagem Equalizada", img_hist)
 
 
     '''
@@ -279,14 +325,17 @@ for i in img_file:
     scipy.misc.imsave('../src/img/output/processing/'+id_img+'_img_cannynewgnh.jpg', gnh)
 
 
-
+    # 
     def traverse(i, j):
         x = [-1, 0, 1, -1, 1, -1, 0, 1]
         y = [-1, -1, -1, 0, 0, 1, 1, 1]
+
         for k in range(8):
             if gnh[i+x[k]][j+y[k]]==0 and gnl[i+x[k]][j+y[k]]!=0:
                 gnh[i+x[k]][j+y[k]]=1
                 traverse(i+x[k], j+y[k])
+
+
 
     for i in range(1, width-1):
         for j in range(1, height-1):
@@ -304,24 +353,27 @@ for i in img_file:
     Step 05 - Template Matching
 
     '''
-    cont_face = 0
     edge_image = cv2.imread('../src/img/output/processing/'+id_img+'_img_cannynewout.jpg', 0)
     
     img_dilate = cv2.dilate(edge_image, np.ones((3, 3)), iterations=1)
-    #img_eroded = cv2.erode(img_dilate, np.ones((3, 3)), iterations=7)
+    #img_eroded = cv2.erode(img_dilate, np.ones((3, 3)), iterations=3)
 
     showImg("Dilate", img_dilate)
 
     labels, count = ndi.label(img_dilate)
 
     for lab, idx in enumerate(ndi.find_objects(labels.astype(int)), 1):
+        
         sy = idx[0].start
         sx = idx[1].start
+        
         y, x = np.where(labels[idx] == lab)
-        ellp = cv2.fitEllipse(np.column_stack((x+sx, y+sy)))
+        
+        # elipse externa
+        ellipse_outer = cv2.fitEllipse(np.column_stack((x+sx, y+sy)))
 
         '''
-            @ Parâmetros de uma elipse
+            @ Parâmetros de uma elipse | elliptical ring
                 
                 xc: coordenada x do centro
                 yc: coordenada y do centro
@@ -329,47 +381,89 @@ for i in img_file:
                 b: semi-eixo secundário
                 theta: ângulo de rotação
         '''
+        # anel eliptico
         (xc, yc), (a, b), theta = cv2.fitEllipse(np.column_stack((x+sx, y+sy)))
         
-        # Verificar se é uma elipse.
+        # calcula os paramentro do pontos que formam a elipse.
         isElipse = ( (xc**2) / (b**2) ) + ( (yc**2) / (a**2) )
 
-        # Mostra caracgteristicas da elipse.
-        print("value: ", isElipse)
-        print("xc: ", xc)
-        print("yc: ", yc) 
-        print("a: ", a)
-        print("b: ", b)
-        print("theta: ", theta)
-        print("ellp", ellp)
+        # Calcula ŕea da elipse.
+        area = a * b * PI
 
-        if(isElipse <= 1):
-            img_orig = cv2.ellipse(img_orig, ellp, (255, 255, 255), 1)
-            img_dilate = cv2.ellipse(img_dilate, ellp, (255, 255, 255), 1)
-            cont_face+=1
-            print('É uma elipse :) ')
-            print "I found {0} face(s) in that image".format(cont_face)
-        else: 
-            print('Não é uma elipse :( ')
+        # Mostra caracteristicas da elipse.
+        if(TEST_UNIT):
+            print("xc: ", xc)
+            print("yc: ", yc) 
+            print("a: ", a)
+            print("b: ", b)
+            print("theta: ", theta)
+            print("value elipse: ", isElipse)
+            print("area: ", area)
+            print("all data ellp outer: ", ellipse_outer)
 
-    scipy.misc.imsave('../src/img/output/result/'+id_img+'_img_detection.jpg', img_orig)
-    scipy.misc.imsave('../src/img/output/result/'+id_img+'_img_detection2.jpg', img_dilate)
+        # Verificar se é uma elipse e estabelece um tamannho da area para evitar err.
+        if(isElipse <= 2): #isElipse <= 2  and area < 36255
+            
+            if(TEST_UNIT):
+                # elipse externa | imagem cinza.
+                img_gray = cv2.ellipse(img_gray, ellipse_outer, (255, 255, 255), 1)
 
-    showImg("Step 05 - Template Matching", img_orig)
+                # imagem binária com detecção facial | elipse externa.
+                img_dilate = cv2.ellipse(img_dilate, ellipse_outer, (255, 255, 255), 1)
+            
+            # imagem cinza com detecção facial
+            img_gray = cv2.ellipse(img_gray, ((xc, yc), (a/1.3, b/1.6), theta), (255, 255, 255), 1) #elipse interna
+            #img_gray = cv2.ellipse(img_gray, ellipse_outer, (255, 255, 255), 1) #elipse externa
 
+            if(TEST_UNIT):
+                img_dilate = cv2.ellipse(img_dilate, ((xc, yc), (a/1.3, b/1.6), theta), (255, 255, 255), 1)
 
+            df_yes+=1
+            
+        else:
+            df_no+=1
+
+    print "Encontrei {0} face(s) nessa imagem.".format(df_yes)
+    
+    if(df_no != 0):
+        print "Encontrei {0} possiveis face(s) nessa imagem.".format(df_no)
+
+    scipy.misc.imsave('../src/img/output/result/'+id_img+'_img_detection.jpg', img_gray)
+    showImg("Step 05 - Template Matching", img_gray)
+
+    if(TEST_UNIT): #TEST_UNIT
+        scipy.misc.imsave('../src/img/output/result/'+id_img+'_img_detection2.jpg', img_dilate)
+        showImg("Detec face img BIN", img_dilate)
+
+    
+
+    # acumulador
+    all_df = all_df + df_yes
+    all_no_df = all_no_df + df_no
+
+    # reseta variáveis
+    df_yes = 0
+    df_no = 0
+
+    # contador de arquivos.
+    allfiles+=1
 
 END_TIME = time.time()
 TIME_TAKEN = END_TIME - START_TIME
 
-print('finish')
-print 'Time taken for execution: ', TIME_TAKEN
+print('Fim de analise :)')
+print('-------------------------------------------------------')
+print 'Tempo total de excução: ', TIME_TAKEN
+print "{0} arquivo(s) analisado(s) no total.".format(allfiles)
+print "Encontrei {0} face(s) no total :)".format(all_df)
+print "Encontrei {0} possiveis face(s) no total ;)".format(all_no_df)
 
 
 
 '''
-Exit
-Usar, somente em modo de teste, quando estiver exibindo as imagens na janela.
+    Exit
+    Finaliza o processo ao clicar em 0.
 '''
-#cv2.waitKey(0)
-#cv2.destroyAllWindows()
+if(TEST_UNIT):
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
